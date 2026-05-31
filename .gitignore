@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Node.js
+node_modules/
+
+# Build artifacts (Vite)
+static/dist/
+static/vendor/
+
+# Database
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db

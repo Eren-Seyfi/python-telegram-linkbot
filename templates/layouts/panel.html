@@ -1,0 +1,393 @@
+{% from "macros/ui.html" import flash_messages %}
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} — LinkBot</title>
+
+  {# Tema flash önleme — CSS yüklenmeden önce çalışır #}
+  <script>
+    (function(){
+      document.documentElement.setAttribute(
+        'data-bs-theme', localStorage.getItem('theme') || 'light'
+      );
+    })();
+  </script>
+
+  {# Vite bundle — CSS #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='dist/main.css') }}">
+
+  <style>
+    :root { --sidebar-w: 230px; }
+    [x-cloak] { display: none !important; }
+
+    /* ── Body ─────────────────────────────────── */
+    body { background: var(--bs-tertiary-bg); }
+
+    /* ── Sidebar ──────────────────────────────── */
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0;
+      width: var(--sidebar-w);
+      background: #0c0e14;
+      border-right: 1px solid rgba(255,255,255,.06);
+      display: flex; flex-direction: column;
+      z-index: 300;
+      transition: transform .25s ease;
+    }
+    .sidebar-brand {
+      padding: 1rem;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      flex-shrink: 0;
+    }
+    .sidebar-nav { padding: .4rem .5rem; flex: 1; overflow-y: auto; }
+    .sidebar-nav .nav-link {
+      color: rgba(255,255,255,.55);
+      padding: .48rem .85rem;
+      border-radius: 8px;
+      margin-bottom: 2px;
+      font-size: .845rem;
+      display: flex; align-items: center; gap: 9px;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .sidebar-nav .nav-link i  { width: 17px; text-align: center; font-size: .95rem; }
+    .sidebar-nav .nav-link:hover  { background: rgba(255,255,255,.07); color: #fff; }
+    .sidebar-nav .nav-link.active { background: #0d6efd; color: #fff; }
+    .sidebar-section {
+      padding: .55rem 1rem .2rem;
+      font-size: .62rem;
+      letter-spacing: .08em;
+      color: rgba(255,255,255,.25);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .sidebar-footer {
+      padding: .75rem 1rem;
+      border-top: 1px solid rgba(255,255,255,.07);
+      font-size: .72rem; color: rgba(255,255,255,.35);
+      flex-shrink: 0;
+    }
+
+    /* ── Main ─────────────────────────────────── */
+    .main { margin-left: var(--sidebar-w); min-height: 100vh; }
+
+    /* ── Topbar ───────────────────────────────── */
+    .topbar {
+      background: var(--bs-body-bg);
+      border-bottom: 1px solid var(--bs-border-color);
+      padding: .55rem 1.25rem;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .page-content { padding: 1.25rem; }
+
+    /* ── Avatar ───────────────────────────────── */
+    .avatar-circle {
+      border-radius: 50%; color: #fff;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Cards ────────────────────────────────── */
+    .stat-card { border-radius: 12px; transition: box-shadow .15s; }
+    .stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.14) !important; }
+    .stat-icon {
+      width:48px; height:48px; border-radius:10px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.2rem; flex-shrink:0;
+    }
+
+    /* ── Code tag (theme-aware) ───────────────── */
+    .code-tag {
+      background: var(--bs-tertiary-bg);
+      color: var(--bs-body-color);
+      border: 1px solid var(--bs-border-color);
+      font-family: var(--bs-font-monospace);
+      font-size: .77rem;
+      padding: .15em .5em;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+
+    /* ── Alpine modal ─────────────────────────── */
+    .alp-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 1050;
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .alp-modal {
+      background: var(--bs-body-bg);
+      border: 1px solid var(--bs-border-color);
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+      width: 100%; max-width: 480px;
+    }
+
+    /* ── Toasts ───────────────────────────────── */
+    .toast-stack {
+      position: fixed; top: 1rem; right: 1rem;
+      z-index: 1200; display: flex; flex-direction: column; gap: .5rem;
+      max-width: calc(100vw - 2rem);
+    }
+
+    /* ── Mobile ───────────────────────────────── */
+    @media (max-width: 767.98px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar-open .sidebar { transform: translateX(0); }
+      .main { margin-left: 0; }
+      .page-content { padding: 1rem .75rem; }
+      .topbar { padding: .5rem .85rem; }
+    }
+  </style>
+
+  {# Alpine component tanımları — Alpine.start() öncesinde kayıt edilmeli #}
+  <script>
+    document.addEventListener('alpine:init', () => {
+
+      Alpine.store('theme', {
+        current: localStorage.getItem('theme') || 'light',
+        toggle() {
+          this.current = this.current === 'light' ? 'dark' : 'light';
+          localStorage.setItem('theme', this.current);
+          document.documentElement.setAttribute('data-bs-theme', this.current);
+        },
+        get isDark() { return this.current === 'dark'; },
+      });
+
+      Alpine.data('panel', () => ({
+        sidebarOpen: false,
+        time: '',
+        init() {
+          this.tick();
+          setInterval(() => this.tick(), 1000);
+          this.$watch('sidebarOpen', v => {
+            document.body.style.overflow = v ? 'hidden' : '';
+            document.documentElement.classList.toggle('sidebar-open', v);
+          });
+        },
+        tick() { this.time = new Date().toLocaleTimeString('tr-TR'); },
+      }));
+
+    });
+  </script>
+</head>
+
+<body x-data="panel()" @keydown.escape="sidebarOpen = false">
+
+  {# Overlay (mobile) #}
+  <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"
+       class="d-md-none"
+       style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:299;"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"></div>
+
+  {# ── Sidebar ──────────────────────────────────────────────────────────── #}
+  <aside class="sidebar">
+    <div class="sidebar-brand d-flex align-items-center gap-2">
+      <div class="bg-primary rounded-2 d-flex align-items-center justify-content-center"
+           style="width:32px;height:32px;flex-shrink:0;">
+        <i class="bi bi-robot text-white" style="font-size:1rem;"></i>
+      </div>
+      <div>
+        <div class="text-white fw-semibold lh-1" style="font-size:.88rem;">LinkBot</div>
+        <div style="font-size:.63rem;color:rgba(255,255,255,.35);">Telegram Panel</div>
+      </div>
+      <button type="button" class="btn btn-link text-white-50 ms-auto p-0 d-md-none"
+              @click="sidebarOpen = false" style="font-size:1.1rem;line-height:1;">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">Genel</div>
+      <ul class="nav flex-column">
+        <li>
+          <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}"
+             href="{{ url_for('index') }}"
+             @click="if(window.innerWidth<768) sidebarOpen=false">
+            <i class="bi bi-speedometer2"></i> Dashboard
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if request.endpoint == 'links_page' %}active{% endif %}"
+             href="{{ url_for('links_page') }}"
+             @click="if(window.innerWidth<768) sidebarOpen=false">
+            <i class="bi bi-link-45deg"></i> Linkler
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if request.endpoint == 'groups_page' %}active{% endif %}"
+             href="{{ url_for('groups_page') }}"
+             @click="if(window.innerWidth<768) sidebarOpen=false">
+            <i class="bi bi-diagram-3"></i> Gruplar
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-section mt-2">Hesap</div>
+      <ul class="nav flex-column">
+        <li>
+          <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}"
+             href="{{ url_for('settings') }}"
+             @click="if(window.innerWidth<768) sidebarOpen=false">
+            <i class="bi bi-gear"></i> Ayarlar
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if request.endpoint == 'profile' %}active{% endif %}"
+             href="{{ url_for('profile') }}"
+             @click="if(window.innerWidth<768) sidebarOpen=false">
+            <i class="bi bi-person-circle"></i> Profil
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="sidebar-footer">
+      <i class="bi bi-circle-fill me-1"
+         style="color:#22c55e;font-size:.4rem;vertical-align:middle;"></i>
+      Panel çalışıyor
+    </div>
+  </aside>
+
+  {# ── Main ─────────────────────────────────────────────────────────────── #}
+  <div class="main">
+    <header class="topbar d-flex align-items-center gap-2">
+
+      {# Hamburger (mobile) #}
+      <button type="button" class="btn btn-sm d-md-none"
+              style="padding:.3rem .45rem;" @click="sidebarOpen = true">
+        <i class="bi bi-list fs-5"></i>
+      </button>
+
+      {# Sayfa başlığı #}
+      <h6 class="mb-0 fw-semibold me-auto text-truncate" style="font-size:.9rem;">
+        {% block page_title %}{% endblock %}
+      </h6>
+
+      {# Saat #}
+      <span class="text-muted d-none d-lg-inline" style="font-size:.74rem;">
+        <i class="bi bi-clock opacity-50 me-1"></i>
+        <span x-text="time"></span>
+      </span>
+
+      {# Dark/Light toggle #}
+      <button class="btn btn-sm rounded-2"
+              :class="$store.theme.isDark ? 'btn-outline-light' : 'btn-outline-secondary'"
+              @click="$store.theme.toggle()"
+              :title="$store.theme.isDark ? 'Açık Moda Geç' : 'Koyu Moda Geç'">
+        <i :class="$store.theme.isDark ? 'bi bi-sun-fill' : 'bi bi-moon-fill'"
+           style="font-size:.82rem;"></i>
+      </button>
+
+      {# Avatar dropdown #}
+      <div class="dropdown">
+        <button class="btn btn-sm d-flex align-items-center gap-2 border rounded-3 px-2 py-1"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                style="font-size:.82rem;">
+          <div class="avatar-circle"
+               style="width:30px;height:30px;font-size:.78rem;
+                      background:{{ current_user.username | avatar_color }}">
+            {{ current_user.username[0].upper() }}
+          </div>
+          <div class="d-none d-md-block text-start lh-sm" style="max-width:130px;">
+            <div class="fw-semibold text-truncate" style="font-size:.78rem;">
+              {{ current_user.username }}
+            </div>
+            {% if current_user.email %}
+            <div class="text-muted text-truncate" style="font-size:.66rem;">
+              {{ current_user.email }}
+            </div>
+            {% endif %}
+          </div>
+          <i class="bi bi-chevron-down d-none d-md-inline opacity-40"
+             style="font-size:.58rem;"></i>
+        </button>
+
+        <ul class="dropdown-menu dropdown-menu-end shadow border mt-1"
+            style="min-width:215px;border-color:var(--bs-border-color)!important;">
+          <li class="px-3 pt-2 pb-2 border-bottom">
+            <div class="d-flex align-items-center gap-2">
+              <div class="avatar-circle flex-shrink-0"
+                   style="width:38px;height:38px;font-size:.95rem;
+                          background:{{ current_user.username | avatar_color }}">
+                {{ current_user.username[0].upper() }}
+              </div>
+              <div style="min-width:0;">
+                <div class="fw-semibold text-truncate" style="font-size:.84rem;">
+                  {{ current_user.username }}
+                </div>
+                {% if current_user.email %}
+                <div class="text-muted text-truncate" style="font-size:.7rem;">
+                  {{ current_user.email }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </li>
+          <li>
+            <a class="dropdown-item d-flex align-items-center gap-2 py-2"
+               href="{{ url_for('profile') }}" style="font-size:.84rem;">
+              <i class="bi bi-person text-primary"></i> Profil
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item d-flex align-items-center gap-2 py-2"
+               href="{{ url_for('groups_page') }}" style="font-size:.84rem;">
+              <i class="bi bi-diagram-3 text-success"></i> Gruplar
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item d-flex align-items-center gap-2 py-2"
+               href="{{ url_for('settings') }}" style="font-size:.84rem;">
+              <i class="bi bi-gear text-secondary"></i> Ayarlar
+            </a>
+          </li>
+          <li><hr class="dropdown-divider my-1"></li>
+          <li>
+            <button class="dropdown-item d-flex align-items-center justify-content-between py-2"
+                    @click="$store.theme.toggle()" style="font-size:.84rem;">
+              <span class="d-flex align-items-center gap-2">
+                <i :class="$store.theme.isDark ? 'bi bi-sun text-warning' : 'bi bi-moon'"></i>
+                <span x-text="$store.theme.isDark ? 'Açık Mod' : 'Koyu Mod'"></span>
+              </span>
+              <span class="badge rounded-pill"
+                    :class="$store.theme.isDark ? 'text-bg-warning' : 'text-bg-secondary'"
+                    x-text="$store.theme.isDark ? 'Koyu' : 'Açık'"
+                    style="font-size:.62rem;"></span>
+            </button>
+          </li>
+          <li><hr class="dropdown-divider my-1"></li>
+          <li>
+            <a class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger"
+               href="{{ url_for('logout') }}" style="font-size:.84rem;">
+              <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+            </a>
+          </li>
+        </ul>
+      </div>
+
+    </header>
+
+    <main class="page-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {{ flash_messages() }}
+
+  {# Vite bundle — type=module defer gibi davranır:
+     tüm inline <script>'ler (alpine:init listener'ları) DOM parse'dan
+     ÖNCE çalışır, bu module SONRA çalışır → Alpine.start() doğru sırada #}
+  <script type="module" src="{{ url_for('static', filename='dist/main.js') }}"></script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

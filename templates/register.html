@@ -1,0 +1,62 @@
+{% extends "layouts/auth.html" %}
+{% from "macros/ui.html" import password_input %}
+
+{% block title %}Kayıt Ol{% endblock %}
+{% block icon %}bi-person-plus{% endblock %}
+{% block heading %}{% if first_setup %}İlk Kullanıcıyı Oluştur{% else %}Kayıt Ol{% endif %}{% endblock %}
+{% block subheading %}{% if first_setup %}Panel için bir yönetici hesabı oluşturun{% else %}Yeni hesap oluşturun{% endif %}{% endblock %}
+
+{% block alerts %}
+{% if first_setup %}
+<div class="alert alert-info d-flex gap-2 align-items-center py-2 small mb-3">
+  <i class="bi bi-info-circle-fill flex-shrink-0"></i>
+  İlk kurulum: Kayıt olduktan sonra panelden kaydı kapatabilirsiniz.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block form %}
+<form method="POST" autocomplete="off">
+  <div class="mb-3">
+    <label class="form-label small fw-semibold">
+      Kullanıcı Adı <span class="text-danger">*</span>
+    </label>
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-person"></i></span>
+      <input type="text" name="username" class="form-control"
+             autofocus required minlength="3" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label small fw-semibold">
+      E-posta <span class="text-danger">*</span>
+    </label>
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+      <input type="email" name="email" class="form-control"
+             required autocomplete="email">
+    </div>
+  </div>
+
+  <div class="mb-3">
+    {{ password_input('password', 'Şifre', placeholder='En az 6 karakter', autocomplete='new-password') }}
+  </div>
+
+  <div class="mb-4">
+    {{ password_input('password2', 'Şifre Tekrar', autocomplete='new-password') }}
+  </div>
+
+  <button type="submit" class="btn btn-primary w-100 fw-semibold">
+    <i class="bi bi-person-check me-1"></i>Kayıt Ol
+  </button>
+</form>
+{% endblock %}
+
+{% block footer_link %}
+<hr class="my-4">
+<p class="text-center text-muted small mb-0">
+  Zaten hesabın var mı?
+  <a href="{{ url_for('login') }}" class="text-decoration-none fw-semibold">Giriş Yap</a>
+</p>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "layouts/auth.html" %}
+{% from "macros/ui.html" import password_input %}
+
+{% block title %}Giriş{% endblock %}
+{% block icon %}bi-robot{% endblock %}
+{% block heading %}LinkBot Panel{% endblock %}
+{% block subheading %}Devam etmek için giriş yapın{% endblock %}
+
+{% block form %}
+<form method="POST" autocomplete="on">
+  <div class="mb-3">
+    <label class="form-label small fw-semibold">E-posta</label>
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+      <input type="email" name="email" class="form-control"
+             autofocus required autocomplete="email">
+    </div>
+  </div>
+
+  <div class="mb-3">
+    {{ password_input('password', 'Şifre') }}
+  </div>
+
+  <div class="mb-4 form-check">
+    <input type="checkbox" class="form-check-input" name="remember" id="remember">
+    <label class="form-check-label small" for="remember">Beni hatırla</label>
+  </div>
+
+  <button type="submit" class="btn btn-primary w-100 fw-semibold">
+    <i class="bi bi-box-arrow-in-right me-1"></i>Giriş Yap
+  </button>
+</form>
+{% endblock %}
+
+{% block footer_link %}
+<hr class="my-4">
+<p class="text-center text-muted small mb-0">
+  Hesabın yok mu?
+  <a href="{{ url_for('register') }}" class="text-decoration-none fw-semibold">Kayıt Ol</a>
+</p>
+{% endblock %}

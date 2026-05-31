@@ -1,0 +1,8 @@
+.env
+.env.example
+node_modules/
+__pycache__/
+*.pyc
+static/vendor/
+static/dist/
+.venv/

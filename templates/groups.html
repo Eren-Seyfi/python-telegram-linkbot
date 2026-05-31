@@ -1,0 +1,621 @@
+{% extends "layouts/panel.html" %}
+
+{% block title %}Gruplar{% endblock %}
+{% block page_title %}Grup Yönetimi{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('groupsPage', () => ({
+
+    /* ── State ── */
+    groups:     [],
+    loading:    true,
+    submitting: false,
+    toasts:     [],
+    addOpen:    false,
+    addForm:    { chat_id: '', title: '', role: 'none' },
+    editOpen:   false,
+    editForm:   { id: null, chat_id: '', title: '' },
+
+    /* ── Pagination ── */
+    page:    1,
+    perPage: 25,
+
+    /* ── Computed ── */
+    get sources() { return this.groups.filter(g => g.role === 'source'); },
+    get targets() { return this.groups.filter(g => g.role === 'target'); },
+    get others()  { return this.groups.filter(g => g.role === 'none');   },
+
+    get totalPages() { return Math.max(1, Math.ceil(this.groups.length / this.perPage)); },
+    get pageGroups() {
+      const p = Math.min(this.page, this.totalPages);
+      return this.groups.slice((p - 1) * this.perPage, p * this.perPage);
+    },
+    get pageRange() {
+      const total = this.totalPages, cur = this.page, w = 2;
+      const set = new Set([1, total]);
+      for (let p = Math.max(1, cur - w); p <= Math.min(total, cur + w); p++) set.add(p);
+      const sorted = [...set].sort((a, b) => a - b);
+      const result = []; let prev = null;
+      for (const p of sorted) {
+        if (prev !== null && p - prev > 1) result.push(null);
+        result.push(p); prev = p;
+      }
+      return result;
+    },
+    get startRow() { return (Math.min(this.page, this.totalPages) - 1) * this.perPage + 1; },
+    get endRow()   { return Math.min(this.page * this.perPage, this.groups.length); },
+    goPage(p) { this.page = Math.max(1, Math.min(p, this.totalPages)); },
+
+    /* ── Init ── */
+    async init() { await this.loadGroups(); },
+
+    /* ── Data ── */
+    async loadGroups() {
+      this.loading = true;
+      try {
+        const r = await fetch('/api/groups');
+        if (r.status === 401) { location.href = '/login'; return; }
+        this.groups = await r.json();
+      } catch { this.toast('Gruplar yüklenemedi.', 'danger'); }
+      this.loading = false;
+    },
+
+    /* ── Rol değiştir ── */
+    async setRole(group, role) {
+      const prev = group.role;
+      group.role = role; // optimistic
+      const r = await fetch(`/api/groups/${group.id}/role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
+      if (!r.ok) {
+        group.role = prev;
+        const d = await r.json();
+        this.toast(d.error || 'Hata.', 'danger');
+      }
+    },
+
+    /* ── Aktif/Pasif ── */
+    async toggleActive(group) {
+      const r = await fetch(`/api/groups/${group.id}/toggle`, { method: 'POST' });
+      if (r.ok) {
+        const d = await r.json();
+        group.is_active = d.is_active;
+      }
+    },
+
+    /* ── Sil ── */
+    async deleteGroup(group) {
+      const label = group.title || `ID: ${group.chat_id}`;
+      if (!confirm(`"${label}" silinsin mi?`)) return;
+      const r = await fetch(`/api/groups/${group.id}`, { method: 'DELETE' });
+      if (r.ok) {
+        this.groups = this.groups.filter(g => g.id !== group.id);
+        this.toast(`"${label}" silindi.`, 'success');
+      }
+    },
+
+    /* ── Düzenle ── */
+    openEdit(group) {
+      this.editForm = { id: group.id, chat_id: String(group.chat_id), title: group.title || '' };
+      this.editOpen = true;
+    },
+
+    async saveEdit() {
+      if (this.submitting) return;
+      this.submitting = true;
+      const r = await fetch(`/api/groups/${this.editForm.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: parseInt(this.editForm.chat_id),
+          title:   this.editForm.title.trim(),
+        }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        const idx = this.groups.findIndex(g => g.id === this.editForm.id);
+        if (idx !== -1) Object.assign(this.groups[idx], data);
+        this.editOpen = false;
+        this.toast(`"${data.title || data.chat_id}" güncellendi.`, 'success');
+      } else {
+        this.toast(data.error || 'Hata.', 'danger');
+      }
+      this.submitting = false;
+    },
+
+    /* ── Manuel ekle ── */
+    async addGroup() {
+      if (this.submitting) return;
+      const chat_id = parseInt(this.addForm.chat_id);
+      if (!chat_id) { this.toast('Geçerli bir Chat ID girin.', 'danger'); return; }
+      this.submitting = true;
+      const r = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id,
+          title: this.addForm.title.trim(),
+          role:  this.addForm.role,
+        }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        this.groups.push(data);
+        this.addForm = { chat_id: '', title: '', role: 'none' };
+        this.addOpen = false;
+        this.toast('Grup eklendi.', 'success');
+      } else {
+        this.toast(data.error || 'Hata.', 'warning');
+      }
+      this.submitting = false;
+    },
+
+    /* ── Helpers ── */
+    fdate(dt) {
+      if (!dt) return '—';
+      const [date, time] = dt.split(' ');
+      const [y, m, d] = date.split('-');
+      return `${d}.${m}.${y} ${(time || '').slice(0, 5)}`;
+    },
+
+    typeIcon(type) {
+      return { group:'bi-people', supergroup:'bi-people-fill',
+               channel:'bi-megaphone', private:'bi-person' }[type] ?? 'bi-chat';
+    },
+
+    toast(message, type = 'success') {
+      const id = Date.now() + Math.random();
+      this.toasts.push({ id, message, type });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
+    },
+
+  }));
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="groupsPage()">
+
+  {# ── Toasts ── #}
+  <div class="toast-stack">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast border-0" :class="`text-bg-${t.type}`"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0 translate-x-4">
+        <div class="d-flex align-items-center">
+          <div class="toast-body" x-text="t.message"></div>
+          <button class="btn-close btn-close-white me-2 ms-auto"
+                  @click="toasts = toasts.filter(x => x.id !== t.id)"></button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# Loading #}
+  <div x-show="loading" class="text-center py-5 text-muted">
+    <div class="spinner-border me-2"></div> Yükleniyor…
+  </div>
+
+  <div x-show="!loading" x-cloak>
+
+    {# ── Özet kartlar ───────────────────────────────────────────────── #}
+    <div class="row g-3 mb-4">
+
+      <div class="col-6 col-lg-3">
+        <div class="card stat-card border-0 shadow-sm h-100">
+          <div class="card-body d-flex align-items-center gap-3 p-3">
+            <div class="stat-icon bg-secondary bg-opacity-10">
+              <i class="bi bi-diagram-3 text-secondary"></i>
+            </div>
+            <div>
+              <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">TOPLAM</div>
+              <div class="fs-3 fw-bold lh-1 mt-1" x-text="groups.length"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-6 col-lg-3">
+        <div class="card stat-card border-0 shadow-sm h-100">
+          <div class="card-body d-flex align-items-center gap-3 p-3">
+            <div class="stat-icon bg-primary bg-opacity-10">
+              <i class="bi bi-people text-primary"></i>
+            </div>
+            <div>
+              <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">KAYNAK</div>
+              <div class="fs-3 fw-bold lh-1 mt-1" x-text="sources.length"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-6 col-lg-3">
+        <div class="card stat-card border-0 shadow-sm h-100">
+          <div class="card-body d-flex align-items-center gap-3 p-3">
+            <div class="stat-icon bg-success bg-opacity-10">
+              <i class="bi bi-megaphone text-success"></i>
+            </div>
+            <div>
+              <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">HEDEF</div>
+              <div class="fs-3 fw-bold lh-1 mt-1" x-text="targets.length"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-6 col-lg-3">
+        <div class="card stat-card border-0 shadow-sm h-100">
+          <div class="card-body d-flex align-items-center gap-3 p-3">
+            <div class="stat-icon bg-warning bg-opacity-10">
+              <i class="bi bi-pause-circle text-warning"></i>
+            </div>
+            <div>
+              <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">ATANMAMIŞ</div>
+              <div class="fs-3 fw-bold lh-1 mt-1" x-text="others.length"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {# ── Uyarı: kaynak veya hedef yoksa ─────────────────────────────── #}
+    <template x-if="groups.length > 0 && (sources.length === 0 || targets.length === 0)">
+      <div class="alert alert-warning d-flex gap-2 align-items-start mb-4"
+           style="font-size:.85rem;">
+        <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+        <div>
+          <span x-show="sources.length === 0 && targets.length === 0">
+            Kaynak ve hedef grup tanımlı değil — bot mesajları iletemiyor.
+          </span>
+          <span x-show="sources.length === 0 && targets.length > 0">
+            Kaynak grup yok — bot dinleyeceği grubu bilmiyor.
+          </span>
+          <span x-show="sources.length > 0 && targets.length === 0">
+            Hedef grup yok — bot iletilen mesajları nereye göndereceğini bilmiyor.
+          </span>
+          Aşağıdaki tablodan gruplara rol atayın.
+        </div>
+      </div>
+    </template>
+
+    {# ── Grup tablosu ────────────────────────────────────────────────── #}
+    <div class="card border-0 shadow-sm">
+
+      <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center gap-2">
+        <span class="fw-semibold me-auto" style="font-size:.9rem;">
+          <i class="bi bi-table me-1 text-primary"></i>
+          Tüm Gruplar
+          <span class="badge bg-primary fw-normal ms-1" x-text="groups.length"></span>
+        </span>
+
+        {# Sayfa başına #}
+        <div class="d-flex align-items-center gap-1">
+          <span class="text-muted small text-nowrap">Sayfa başına:</span>
+          <select x-model.number="perPage" @change="page = 1"
+                  class="form-select form-select-sm" style="width:70px;">
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+        </div>
+
+        <button class="btn btn-sm btn-outline-secondary" @click="loadGroups()" title="Yenile">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+        <button class="btn btn-sm btn-primary" @click="addOpen = true">
+          <i class="bi bi-plus-lg me-1"></i>
+          <span class="d-none d-sm-inline">Manuel Ekle</span>
+        </button>
+      </div>
+
+      <div class="card-body p-0">
+
+        {# Boş durum #}
+        <div x-show="groups.length === 0" x-cloak class="text-center py-5 text-muted">
+          <i class="bi bi-diagram-3 fs-1 d-block mb-2 opacity-25"></i>
+          <div>Bot mesaj aldığında gruplar otomatik keşfedilir.</div>
+          <div class="mt-3">
+            <button class="btn btn-sm btn-outline-primary" @click="addOpen = true">
+              <i class="bi bi-plus-lg me-1"></i>Manuel Ekle
+            </button>
+          </div>
+        </div>
+
+        {# Tablo #}
+        <div x-show="groups.length > 0" x-cloak class="table-responsive">
+          <table class="table table-hover align-middle mb-0" style="min-width:600px;">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3 py-2 text-muted fw-semibold"
+                    style="font-size:.72rem;letter-spacing:.04em;">GRUP / KANAL</th>
+                <th class="py-2 text-muted fw-semibold d-none d-md-table-cell"
+                    style="font-size:.72rem;letter-spacing:.04em;width:95px;">TİP</th>
+                <th class="py-2 text-muted fw-semibold"
+                    style="font-size:.72rem;letter-spacing:.04em;width:200px;">ROL</th>
+                <th class="py-2 text-muted fw-semibold d-none d-lg-table-cell"
+                    style="font-size:.72rem;letter-spacing:.04em;width:140px;">SON GÖRÜLME</th>
+                <th class="py-2 text-muted fw-semibold"
+                    style="font-size:.72rem;letter-spacing:.04em;width:75px;">AKTİF</th>
+                <th class="pe-3 py-2 text-end text-muted fw-semibold"
+                    style="font-size:.72rem;letter-spacing:.04em;width:85px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="g in pageGroups" :key="g.id">
+                <tr :class="g.is_active ? '' : 'opacity-50'">
+
+                  {# Grup bilgisi #}
+                  <td class="ps-3 py-2">
+                    <div class="d-flex align-items-center gap-2">
+                      <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                           style="width:34px;height:34px;"
+                           :class="g.role==='source' ? 'bg-primary bg-opacity-10' :
+                                   g.role==='target' ? 'bg-success bg-opacity-10' :
+                                   'bg-secondary bg-opacity-10'">
+                        <i style="font-size:.95rem;"
+                           :class="'bi ' + typeIcon(g.chat_type)"
+                           :style="g.role==='source' ? 'color:var(--bs-primary)' :
+                                   g.role==='target' ? 'color:var(--bs-success)' :
+                                   'color:var(--bs-secondary)'"></i>
+                      </div>
+                      <div style="min-width:0;">
+                        <div class="fw-semibold text-truncate"
+                             style="font-size:.84rem;max-width:200px;"
+                             x-text="g.title || '(İsimsiz)'"></div>
+                        <code class="text-muted" style="font-size:.7rem;"
+                              x-text="g.chat_id"></code>
+                      </div>
+                    </div>
+                  </td>
+
+                  {# Tip #}
+                  <td class="py-2 d-none d-md-table-cell">
+                    <span class="text-muted" style="font-size:.8rem;">
+                      <i :class="'bi ' + typeIcon(g.chat_type) + ' me-1'"></i>
+                      <span x-text="g.chat_type || '—'"></span>
+                    </span>
+                  </td>
+
+                  {# Rol butonları #}
+                  <td class="py-2">
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button"
+                              class="btn"
+                              :class="g.role==='source' ? 'btn-primary' : 'btn-outline-secondary'"
+                              style="font-size:.75rem;padding:.25rem .6rem;"
+                              @click="setRole(g,'source')">
+                        <i class="bi bi-people me-1"></i>Kaynak
+                      </button>
+                      <button type="button"
+                              class="btn"
+                              :class="g.role==='target' ? 'btn-success' : 'btn-outline-secondary'"
+                              style="font-size:.75rem;padding:.25rem .6rem;"
+                              @click="setRole(g,'target')">
+                        <i class="bi bi-megaphone me-1"></i>Hedef
+                      </button>
+                      <button type="button"
+                              class="btn"
+                              :class="g.role==='none' ? 'btn-secondary' : 'btn-outline-secondary'"
+                              style="font-size:.75rem;padding:.25rem .6rem;"
+                              @click="setRole(g,'none')">
+                        Yok
+                      </button>
+                    </div>
+                  </td>
+
+                  {# Son görülme #}
+                  <td class="py-2 text-muted d-none d-lg-table-cell"
+                      style="font-size:.78rem;white-space:nowrap;">
+                    <i class="bi bi-clock me-1 opacity-50"></i>
+                    <span x-text="fdate(g.last_seen_at)"></span>
+                  </td>
+
+                  {# Aktif toggle #}
+                  <td class="py-2">
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" role="switch"
+                             style="width:2em;height:1.1em;cursor:pointer;"
+                             :checked="g.is_active"
+                             @change="toggleActive(g)">
+                    </div>
+                  </td>
+
+                  {# Düzenle / Sil #}
+                  <td class="pe-3 py-2 text-end">
+                    <div class="d-flex justify-content-end gap-1">
+                      <button type="button" class="btn btn-sm btn-light"
+                              title="Düzenle" @click="openEdit(g)">
+                        <i class="bi bi-pencil text-secondary"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-light"
+                              title="Sil" @click="deleteGroup(g)">
+                        <i class="bi bi-trash text-danger"></i>
+                      </button>
+                    </div>
+                  </td>
+
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          {# Pagination #}
+          <div x-show="totalPages > 1 || groups.length > 0"
+               class="d-flex flex-wrap align-items-center justify-content-between gap-2
+                      px-3 py-2 border-top" style="font-size:.82rem;">
+            <span class="text-muted">
+              <span x-text="startRow"></span>–<span x-text="endRow"></span>
+              / <span x-text="groups.length"></span> grup
+            </span>
+            <nav x-show="totalPages > 1">
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" :class="{ disabled: page === 1 }">
+                  <button class="page-link" @click="goPage(page - 1)">
+                    <i class="bi bi-chevron-left" style="font-size:.7rem;"></i>
+                  </button>
+                </li>
+                <template x-for="p in pageRange" :key="p ?? ('dot-' + Math.random())">
+                  <li class="page-item" :class="{ active: p === page, disabled: p === null }">
+                    <button class="page-link" x-text="p ?? '…'"
+                            @click="p !== null && goPage(p)"></button>
+                  </li>
+                </template>
+                <li class="page-item" :class="{ disabled: page === totalPages }">
+                  <button class="page-link" @click="goPage(page + 1)">
+                    <i class="bi bi-chevron-right" style="font-size:.7rem;"></i>
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    {# ── Bilgi notu ──────────────────────────────────────────────────── #}
+    <div class="alert alert-info d-flex gap-2 align-items-start mt-4"
+         style="font-size:.82rem;">
+      <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+      <div>
+        Bot, mesaj aldığı grupları otomatik keşfeder ve listeye ekler.
+        <strong>Kaynak</strong> gruptan gelen mesajlar link tablosuna göre düzenlenerek
+        <strong>Hedef</strong> gruba/kanala iletilir.
+        Birden fazla kaynak veya hedef tanımlayabilirsiniz.
+        <strong>Yok</strong> rolündeki gruplar izleme dışı tutulur.
+      </div>
+    </div>
+
+  </div>{# /!loading #}
+
+  {# ── Grup Düzenle Modal ──────────────────────────────────────────── #}
+  <div x-show="editOpen" x-cloak
+       @keydown.escape.window="editOpen = false"
+       @click.self="editOpen = false"
+       class="alp-backdrop"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0">
+    <div class="alp-modal">
+      <div class="d-flex align-items-center justify-content-between
+                  px-4 pt-4 pb-3 border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-pencil-square me-2 text-primary"></i>Grubu Düzenle
+        </h6>
+        <button type="button" class="btn-close" @click="editOpen = false"></button>
+      </div>
+      <div class="p-4">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">
+            Chat ID <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-hash"></i></span>
+            <input type="number" x-model="editForm.chat_id"
+                   class="form-control font-monospace"
+                   @keydown.enter.prevent="saveEdit()">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Başlık</label>
+          <input type="text" x-model="editForm.title"
+                 class="form-control"
+                 placeholder="Grup / kanal adı"
+                 @keydown.enter.prevent="saveEdit()">
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2 px-4 pb-4">
+        <button type="button" class="btn btn-light"
+                @click="editOpen = false">İptal</button>
+        <button type="button" class="btn btn-primary"
+                @click="saveEdit()" :disabled="submitting">
+          <span x-show="!submitting">
+            <i class="bi bi-save me-1"></i>Kaydet
+          </span>
+          <span x-show="submitting" x-cloak>
+            <span class="spinner-border spinner-border-sm me-1"></span>Kaydediliyor
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ── Manuel Grup Ekle Modal ─────────────────────────────────────── #}
+  <div x-show="addOpen" x-cloak
+       @keydown.escape.window="addOpen = false"
+       @click.self="addOpen = false"
+       class="alp-backdrop"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0">
+    <div class="alp-modal">
+      <div class="d-flex align-items-center justify-content-between
+                  px-4 pt-4 pb-3 border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-plus-circle me-2 text-primary"></i>Manuel Grup Ekle
+        </h6>
+        <button type="button" class="btn-close" @click="addOpen = false"></button>
+      </div>
+      <div class="p-4">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">
+            Chat ID <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-hash"></i></span>
+            <input type="number" x-model="addForm.chat_id"
+                   class="form-control font-monospace"
+                   placeholder="-1001234567890"
+                   @keydown.enter.prevent="addGroup()">
+          </div>
+          <div class="form-text">Telegram grup/kanal sayısal ID'si</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Başlık</label>
+          <input type="text" x-model="addForm.title" class="form-control"
+                 placeholder="İsteğe bağlı"
+                 @keydown.enter.prevent="addGroup()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Rol</label>
+          <select x-model="addForm.role" class="form-select">
+            <option value="none">Yok (izleme dışı)</option>
+            <option value="source">Kaynak — bot bu gruptan dinler</option>
+            <option value="target">Hedef — bot bu gruba iletir</option>
+          </select>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2 px-4 pb-4">
+        <button type="button" class="btn btn-light"
+                @click="addOpen = false">İptal</button>
+        <button type="button" class="btn btn-primary"
+                @click="addGroup()" :disabled="submitting">
+          <span x-show="!submitting">
+            <i class="bi bi-plus-lg me-1"></i>Ekle
+          </span>
+          <span x-show="submitting" x-cloak>
+            <span class="spinner-border spinner-border-sm me-1"></span>Ekleniyor
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>{# /groupsPage #}
+{% endblock %}

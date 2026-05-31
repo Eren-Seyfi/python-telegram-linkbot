@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty' 2>/dev/null); d=$(dirname \"$f\"); while [ -n \"$d\" ] && [ \"$d\" != \"/\" ] && [ ! -f \"$d/docker-compose.yml\" ]; do d=$(dirname \"$d\"); done; [ -f \"$d/docker-compose.yml\" ] && cd \"$d\" && docker-compose build --no-cache 2>&1 | tail -5 && docker-compose up -d 2>&1 || true",
+            "timeout": 300,
+            "statusMessage": "Docker rebuild & restart…"
+          }
+        ]
+      }
+    ]
+  }
+}

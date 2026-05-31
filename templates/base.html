@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LinkBot{% endblock %} — LinkBot Panel</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons.min.css') }}">
+  <style>
+    :root { --sidebar-w: 230px; }
+    body  { background: #f1f3f6; }
+
+    /* ── Sidebar ─────────────────────────────────── */
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0;
+      width: var(--sidebar-w);
+      background: #0f1117;
+      display: flex; flex-direction: column;
+      z-index: 300;
+      transition: transform .25s ease;
+    }
+    .sidebar-brand {
+      padding: 1.25rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      flex-shrink: 0;
+    }
+    .sidebar-nav { padding: .5rem .5rem; flex: 1; overflow-y: auto; }
+    .sidebar-nav .nav-link {
+      color: rgba(255,255,255,.6);
+      padding: .55rem .9rem;
+      border-radius: 8px;
+      margin-bottom: 2px;
+      font-size: .875rem;
+      display: flex; align-items: center; gap: 10px;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .sidebar-nav .nav-link i { width: 18px; text-align: center; font-size: 1rem; }
+    .sidebar-nav .nav-link:hover  { background: rgba(255,255,255,.07); color: #fff; }
+    .sidebar-nav .nav-link.active { background: #0d6efd; color: #fff; }
+    .sidebar-footer {
+      padding: .85rem 1rem;
+      border-top: 1px solid rgba(255,255,255,.08);
+      font-size: .75rem; color: rgba(255,255,255,.4);
+      flex-shrink: 0;
+    }
+
+    /* ── Overlay (mobile) ────────────────────────── */
+    .sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 299;
+    }
+    .sidebar-overlay.show { display: block; }
+
+    /* ── Main ────────────────────────────────────── */
+    .main { margin-left: var(--sidebar-w); min-height: 100vh; }
+
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: .65rem 1.25rem;
+      position: sticky; top: 0; z-index: 200;
+    }
+
+    .content { padding: 1.25rem; }
+
+    /* ── Cards ───────────────────────────────────── */
+    .stat-card { border: none; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .stat-icon {
+      width: 48px; height: 48px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; flex-shrink: 0;
+    }
+
+    /* ── Toasts ──────────────────────────────────── */
+    .toast-stack {
+      position: fixed; top: 1rem; right: 1rem;
+      z-index: 1200; display: flex; flex-direction: column; gap: .5rem;
+      max-width: calc(100vw - 2rem);
+    }
+
+    /* ── Mobile overrides ────────────────────────── */
+    @media (max-width: 767.98px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; }
+      .content { padding: 1rem .75rem; }
+      .topbar { padding: .6rem .9rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand d-flex align-items-center gap-2">
+    <div class="bg-primary rounded-2 d-flex align-items-center justify-content-center"
+         style="width:34px;height:34px;flex-shrink:0;">
+      <i class="bi bi-robot text-white" style="font-size:1.1rem;"></i>
+    </div>
+    <div>
+      <div class="text-white fw-semibold lh-1" style="font-size:.95rem;">LinkBot</div>
+      <div style="font-size:.68rem;color:rgba(255,255,255,.4);">Telegram Panel</div>
+    </div>
+    <!-- Close btn (mobile) -->
+    <button class="btn btn-link text-white ms-auto d-md-none p-0"
+            onclick="closeSidebar()" style="font-size:1.25rem; line-height:1;">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <ul class="nav flex-column">
+      <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}"
+           href="{{ url_for('index') }}" onclick="closeSidebarMobile()">
+          <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'links_page' %}active{% endif %}"
+           href="{{ url_for('links_page') }}" onclick="closeSidebarMobile()">
+          <i class="bi bi-link-45deg"></i> Linkler
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}"
+           href="{{ url_for('settings') }}" onclick="closeSidebarMobile()">
+          <i class="bi bi-gear"></i> Ayarlar
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <div class="sidebar-footer">
+    <i class="bi bi-circle-fill me-1" style="color:#22c55e;font-size:.45rem;vertical-align:middle;"></i>
+    Panel çalışıyor
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar d-flex align-items-center gap-2">
+    <!-- Hamburger (mobile) -->
+    <button class="btn btn-sm btn-light d-md-none me-1" onclick="openSidebar()"
+            style="padding:.3rem .5rem;">
+      <i class="bi bi-list fs-5"></i>
+    </button>
+
+    <h6 class="mb-0 fw-semibold text-dark me-auto text-truncate">
+      {% block page_title %}{% endblock %}
+    </h6>
+
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+      <span class="text-muted d-none d-sm-inline" style="font-size:.78rem;">
+        <i class="bi bi-clock me-1"></i><span id="clock"></span>
+      </span>
+      <span class="text-muted d-none d-sm-inline" style="font-size:.78rem;">
+        <i class="bi bi-person-circle me-1"></i>{{ current_user.username }}
+      </span>
+      <a href="{{ url_for('logout') }}"
+         class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+         style="font-size:.75rem; padding:.25rem .55rem; white-space:nowrap;">
+        <i class="bi bi-box-arrow-right"></i>
+        <span class="d-none d-sm-inline">Çıkış</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<!-- Toast Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="toast-stack">
+  {% for category, message in messages %}
+  {% set bg = 'success' if category == 'success' else ('warning' if category == 'warning' else ('info' if category == 'info' else 'danger')) %}
+  <div class="toast show border-0 text-bg-{{ bg }}" role="alert">
+    <div class="d-flex">
+      <div class="toast-body">{{ message }}</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto"
+              data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
+<script>
+  // Toasts
+  document.querySelectorAll('.toast').forEach(el => {
+    new bootstrap.Toast(el, { delay: 4000 }).show();
+  });
+
+  // Clock
+  const cl = document.getElementById('clock');
+  const tick = () => cl && (cl.textContent = new Date().toLocaleTimeString('tr-TR'));
+  tick(); setInterval(tick, 1000);
+
+  // Sidebar
+  function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+  }
+  function closeSidebarMobile() {
+    if (window.innerWidth < 768) closeSidebar();
+  }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

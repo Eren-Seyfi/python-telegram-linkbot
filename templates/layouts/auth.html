@@ -1,0 +1,94 @@
+{% from "macros/ui.html" import flash_messages %}
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} — LinkBot</title>
+
+  <script>
+    (function(){
+      document.documentElement.setAttribute(
+        'data-bs-theme', localStorage.getItem('theme') || 'light'
+      );
+    })();
+  </script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='dist/main.css') }}">
+
+  <style>
+    [x-cloak] { display: none !important; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0c0e14 0%, #161d30 100%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .auth-card {
+      width: 100%; max-width: 420px;
+      border-radius: 16px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.55);
+      background: #181b24 !important;
+      border: 1px solid rgba(255,255,255,.08) !important;
+      color: #e2e8f0;
+    }
+    .auth-card .form-label   { color: #94a3b8; font-size: .83rem; font-weight: 600; }
+    .auth-card .form-control {
+      background: #0c0e14; border-color: rgba(255,255,255,.1); color: #e2e8f0;
+    }
+    .auth-card .form-control::placeholder { color: #475569; }
+    .auth-card .form-control:focus {
+      background: #0c0e14; border-color: #3b82f6; color: #e2e8f0;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.2);
+    }
+    .auth-card .input-group-text {
+      background: #0c0e14; border-color: rgba(255,255,255,.1); color: #475569;
+    }
+    .auth-card .btn-outline-secondary {
+      border-color: rgba(255,255,255,.1); color: #64748b;
+    }
+    .auth-card .btn-outline-secondary:hover {
+      background: rgba(255,255,255,.06); color: #94a3b8;
+    }
+    .auth-card h5, .auth-card h6 { color: #f1f5f9; }
+    .auth-card .text-muted { color: #475569 !important; }
+    .auth-card .form-check-label { color: #64748b; }
+    .auth-card a { color: #60a5fa; }
+    .auth-card a:hover { color: #93c5fd; }
+    .auth-card hr { border-color: rgba(255,255,255,.08); }
+    .auth-card .alert-info {
+      background: rgba(14,165,233,.12);
+      border-color: rgba(14,165,233,.25);
+      color: #7dd3fc;
+    }
+    .toast-stack {
+      position: fixed; top: 1rem; right: 1rem;
+      z-index: 1200; display: flex; flex-direction: column; gap: .5rem;
+      max-width: calc(100vw - 2rem);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="auth-card card p-4 p-sm-5">
+    <div class="text-center mb-4">
+      <div class="d-inline-flex align-items-center justify-content-center
+                  bg-primary rounded-3 mb-3" style="width:50px;height:50px;">
+        <i class="bi {% block icon %}bi-robot{% endblock %} text-white fs-5"></i>
+      </div>
+      <h5 class="fw-bold mb-1">{% block heading %}LinkBot{% endblock %}</h5>
+      <p class="text-muted small mb-0">{% block subheading %}{% endblock %}</p>
+    </div>
+
+    {% block alerts %}{% endblock %}
+    {% block form %}{% endblock %}
+    {% block footer_link %}{% endblock %}
+  </div>
+
+  {{ flash_messages() }}
+
+  <script type="module" src="{{ url_for('static', filename='dist/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,249 @@
+{% extends "layouts/panel.html" %}
+
+{% block title %}Ayarlar{% endblock %}
+{% block page_title %}Ayarlar{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('settingsPage', () => ({
+
+    /* ── State ── */
+    bot: { BOT_TOKEN: '', APP_URL: '', APP_PORT: '' },
+    app: { registration_enabled: true, user_count: 0 },
+    loading:    true,
+    submitting: false,
+    showToken:  false,
+    toasts:     [],
+
+    /* ── Init ── */
+    async init() {
+      const r = await fetch('/api/settings');
+      if (r.status === 401) { location.href = '/login'; return; }
+      const data = await r.json();
+      this.bot = { BOT_TOKEN: data.BOT_TOKEN, APP_URL: data.APP_URL, APP_PORT: data.APP_PORT };
+      this.app = {
+        registration_enabled: data.registration_enabled,
+        user_count:           data.user_count,
+      };
+      this.loading = false;
+    },
+
+    /* ── Bot ayarları ── */
+    async saveBotSettings() {
+      if (this.submitting) return;
+      this.submitting = true;
+      const r = await fetch('/api/settings/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.bot),
+      });
+      const data = await r.json();
+      this.toast(r.ok
+        ? 'Bot token kaydedildi. Değişiklikler için botu yeniden başlatın.'
+        : data.error,
+        r.ok ? 'success' : 'danger'
+      );
+      this.submitting = false;
+    },
+
+    /* ── Uygulama ayarları ── */
+    async saveAppSettings() {
+      if (this.submitting) return;
+      this.submitting = true;
+      const r = await fetch('/api/settings/app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registration_enabled: this.app.registration_enabled }),
+      });
+      this.toast(r.ok ? 'Uygulama ayarları kaydedildi.' : 'Bir hata oluştu.',
+                 r.ok ? 'success' : 'danger');
+      this.submitting = false;
+    },
+
+    /* ── Helpers ── */
+    toast(message, type = 'success') {
+      const id = Date.now() + Math.random();
+      this.toasts.push({ id, message, type });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 5000);
+    },
+
+  }));
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="settingsPage()">
+
+  {# ── Toasts ── #}
+  <div class="toast-stack">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast border-0" :class="`text-bg-${t.type}`"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0 translate-x-4">
+        <div class="d-flex align-items-center">
+          <div class="toast-body" x-text="t.message"></div>
+          <button class="btn-close btn-close-white me-2 ms-auto"
+                  @click="toasts = toasts.filter(x => x.id !== t.id)"></button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# Loading #}
+  <div x-show="loading" class="text-center py-5 text-muted">
+    <div class="spinner-border me-2"></div> Yükleniyor…
+  </div>
+
+  <div class="row justify-content-center" x-show="!loading" x-cloak>
+    <div class="col-12 col-lg-7">
+
+      {# ── Bot Token ──────────────────────────────────────────────────── #}
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header py-3">
+          <span class="fw-semibold" style="font-size:.9rem;">
+            <i class="bi bi-sliders me-2 text-primary"></i>Bot ve Uygulama Yapılandırması
+          </span>
+        </div>
+        <div class="card-body p-4">
+
+          <div class="alert alert-info d-flex gap-2 align-items-start mb-4"
+               style="font-size:.85rem;">
+            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+            <div>
+              Değişiklikler <code>.env</code> dosyasına kaydedilir.
+              Yeni token için botu yeniden başlatın:
+              <code>docker compose restart bot</code>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">
+              Bot Token <span class="text-danger">*</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-key"></i></span>
+              <input :type="showToken ? 'text' : 'password'"
+                     x-model="bot.BOT_TOKEN"
+                     class="form-control font-monospace"
+                     placeholder="1234567890:ABCdef…"
+                     required>
+              <button type="button" class="btn btn-outline-secondary"
+                      @click="showToken = !showToken"
+                      :title="showToken ? 'Gizle' : 'Göster'">
+                <i :class="showToken ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+              </button>
+            </div>
+            <div class="form-text">BotFather'dan alınan Telegram API token'ı</div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-12 col-sm-8">
+              <label class="form-label fw-semibold small">Panel URL</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-globe"></i></span>
+                <input type="url" x-model="bot.APP_URL"
+                       class="form-control"
+                       placeholder="http://localhost">
+              </div>
+              <div class="form-text">Panelin dışarıdan erişilen adresi (örn: https://bot.sitem.com)</div>
+            </div>
+            <div class="col-12 col-sm-4">
+              <label class="form-label fw-semibold small">Port</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-plug"></i></span>
+                <input type="number" x-model="bot.APP_PORT"
+                       class="form-control"
+                       min="1" max="65535"
+                       placeholder="5000">
+              </div>
+              <div class="form-text">Değişiklik sonrası konteyneri yeniden başlat.</div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-primary" @click="saveBotSettings()" :disabled="submitting">
+              <span x-show="!submitting"><i class="bi bi-save me-1"></i>Kaydet</span>
+              <span x-show="submitting" x-cloak>
+                <span class="spinner-border spinner-border-sm me-1"></span>Kaydediliyor
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {# ── Kaynak / Hedef Gruplar ────────────────────────────────────── #}
+      <div class="card border-0 shadow-sm mb-4"
+           style="border-left: 3px solid var(--bs-primary) !important;">
+        <div class="card-body p-4 d-flex align-items-start gap-3">
+          <div class="stat-icon bg-primary bg-opacity-10 flex-shrink-0">
+            <i class="bi bi-diagram-3 text-primary"></i>
+          </div>
+          <div style="min-width:0;">
+            <div class="fw-semibold mb-1">Kaynak ve Hedef Gruplar</div>
+            <div class="text-muted mb-3" style="font-size:.85rem;">
+              Botun hangi gruplarda dinleyeceği (kaynak) ve mesajları nereye ileteceği
+              (hedef) <strong>Gruplar</strong> sayfasından yönetilir.
+              Bot mesaj aldığı grupları otomatik keşfederek listeye ekler.
+            </div>
+            <a href="{{ url_for('groups_page') }}" class="btn btn-primary btn-sm">
+              <i class="bi bi-diagram-3 me-1"></i>Grupları Yönet
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {# ── Kullanıcı ve Erişim ───────────────────────────────────────── #}
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-3">
+          <span class="fw-semibold" style="font-size:.9rem;">
+            <i class="bi bi-shield-lock me-2 text-primary"></i>Kullanıcı ve Erişim
+          </span>
+        </div>
+        <div class="card-body p-4">
+
+          <div class="d-flex align-items-center justify-content-between
+                      border rounded-3 px-3 py-3 mb-3">
+            <div>
+              <div class="fw-semibold small">Kayıt Ol Sayfası</div>
+              <div class="text-muted" style="font-size:.8rem;">
+                <span x-show="app.registration_enabled">Yeni kullanıcılar kayıt olabilir.</span>
+                <span x-show="!app.registration_enabled" x-cloak>
+                  <code>/register</code> sayfası erişime kapalı.
+                </span>
+                <span x-show="app.user_count === 0"
+                      class="text-warning fw-semibold d-block" x-cloak>
+                  Henüz kullanıcı yok — ilk kayıt için açık kalmalı.
+                </span>
+              </div>
+            </div>
+            <div class="form-check form-switch ms-3 mb-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     style="width:2.5em;height:1.3em;cursor:pointer;"
+                     x-model="app.registration_enabled">
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="text-muted small">
+              <i class="bi bi-people me-1"></i>
+              Kayıtlı kullanıcı: <strong x-text="app.user_count"></strong>
+            </div>
+            <button class="btn btn-primary btn-sm"
+                    @click="saveAppSettings()" :disabled="submitting">
+              <i class="bi bi-save me-1"></i>Kaydet
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>{# /settingsPage #}
+{% endblock %}

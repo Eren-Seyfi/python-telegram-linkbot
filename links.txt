@@ -1,0 +1,3 @@
+# Format: anahtar_kelime : yeni_link
+# Anahtar kelime: mesaj metninde VEYA kaynak linkin "/" sonrasında aranır
+

@@ -1,0 +1,369 @@
+{% extends "layouts/panel.html" %}
+{% from "macros/ui.html" import password_input %}
+
+{% block title %}Profil{% endblock %}
+{% block page_title %}Profilim{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('profilePage', () => ({
+
+    /* ── State ── */
+    info:       { username: '', email: '' },
+    pw:         { current_password: '', new_password: '', confirm_password: '' },
+    history:    [],
+    loading:    true,
+    submitting: false,
+    toasts:     [],
+
+    /* ── History pagination ── */
+    histPage:  1,
+    histPer:   10,
+    get histStart() { return (Math.min(this.histPage, this.histPages) - 1) * this.histPer + 1; },
+    get histEnd()   { return Math.min(this.histPage * this.histPer, this.histTotal); },
+    get histTotal()  { return this.history.length; },
+    get histPages()  { return Math.max(1, Math.ceil(this.histTotal / this.histPer)); },
+    get histRows()   {
+      const p = Math.min(this.histPage, this.histPages);
+      return this.history.slice((p - 1) * this.histPer, p * this.histPer);
+    },
+    get histRange() {
+      const total = this.histPages, cur = this.histPage, w = 2;
+      const set = new Set([1, total]);
+      for (let p = Math.max(1, cur-w); p <= Math.min(total, cur+w); p++) set.add(p);
+      const sorted = [...set].sort((a,b) => a-b);
+      const result = []; let prev = null;
+      for (const p of sorted) {
+        if (prev !== null && p - prev > 1) result.push(null);
+        result.push(p); prev = p;
+      }
+      return result;
+    },
+
+    /* ── Init ── */
+    async init() {
+      const [infoRes, histRes] = await Promise.all([
+        fetch('/api/profile'),
+        fetch('/api/profile/history'),
+      ]);
+      if (infoRes.status === 401 || histRes.status === 401) { location.href = '/login'; return; }
+      this.info    = await infoRes.json();
+      this.history = await histRes.json();
+      this.loading = false;
+    },
+
+    /* ── Profil güncelle ── */
+    async saveInfo() {
+      if (this.submitting) return;
+      this.submitting = true;
+      const r = await fetch('/api/profile/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.info),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        this.toast('Profil bilgileri güncellendi.', 'success');
+      } else {
+        this.toast(data.error, 'danger');
+      }
+      this.submitting = false;
+    },
+
+    /* ── Şifre güncelle ── */
+    async savePassword() {
+      if (this.submitting) return;
+      this.submitting = true;
+      const r = await fetch('/api/profile/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.pw),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        this.pw = { current_password: '', new_password: '', confirm_password: '' };
+        this.toast('Şifre başarıyla değiştirildi.', 'success');
+      } else {
+        this.toast(data.error, 'danger');
+      }
+      this.submitting = false;
+    },
+
+    /* ── Helpers ── */
+    fdate(dt) {
+      if (!dt) return '—';
+      const [date, time] = dt.split(' ');
+      const [y, m, d] = date.split('-');
+      return `${d}.${m}.${y} ${(time||'').slice(0,5)}`;
+    },
+
+    browserIcon(b) {
+      return { Chrome:'bi-browser-chrome text-warning', Firefox:'bi-browser-firefox text-danger',
+               Safari:'bi-browser-safari text-info', Edge:'bi-browser-edge text-primary' }[b] || 'bi-globe text-muted';
+    },
+
+    osIcon(os) {
+      return { Windows:'bi-windows text-info', macOS:'bi-apple', Android:'bi-android2 text-success',
+               iOS:'bi-apple text-muted', Linux:'bi-ubuntu text-warning' }[os] || 'bi-question-circle text-muted';
+    },
+
+    deviceIcon(d) {
+      return { Mobil:'bi-phone', Tablet:'bi-tablet' }[d] || 'bi-display';
+    },
+
+    toast(message, type = 'success') {
+      const id = Date.now() + Math.random();
+      this.toasts.push({ id, message, type });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
+    },
+
+  }));
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="profilePage()">
+
+  {# ── Toasts ── #}
+  <div class="toast-stack">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast border-0"
+           :class="`text-bg-${t.type}`"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0 translate-x-4">
+        <div class="d-flex align-items-center">
+          <div class="toast-body" x-text="t.message"></div>
+          <button class="btn-close btn-close-white me-2 ms-auto"
+                  @click="toasts = toasts.filter(x => x.id !== t.id)"></button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# Loading #}
+  <div x-show="loading" class="text-center py-5 text-muted">
+    <div class="spinner-border me-2"></div> Yükleniyor…
+  </div>
+
+  <div x-show="!loading" x-cloak>
+
+    {# ── Üst: profil + şifre ─────────────────────────────────────────── #}
+    <div class="row g-4 mb-4">
+
+      {# Profil bilgileri #}
+      <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header py-3">
+            <span class="fw-semibold" style="font-size:.9rem;">
+              <i class="bi bi-person me-2 text-primary"></i>Profil Bilgileri
+            </span>
+          </div>
+          <div class="card-body p-4">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Kullanıcı Adı</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                <input type="text" x-model="info.username" class="form-control"
+                       required minlength="3">
+              </div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label small fw-semibold">E-posta</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                <input type="email" x-model="info.email" class="form-control" required>
+              </div>
+            </div>
+            <div class="d-flex justify-content-end">
+              <button class="btn btn-primary" @click="saveInfo()" :disabled="submitting">
+                <span x-show="!submitting"><i class="bi bi-save me-1"></i>Kaydet</span>
+                <span x-show="submitting" x-cloak>
+                  <span class="spinner-border spinner-border-sm me-1"></span>Kaydediliyor
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Şifre değiştir #}
+      <div class="col-12 col-lg-6" x-data="{ showCur: false, showNew: false, showCon: false }">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header py-3">
+            <span class="fw-semibold" style="font-size:.9rem;">
+              <i class="bi bi-lock me-2 text-primary"></i>Şifre Değiştir
+            </span>
+          </div>
+          <div class="card-body p-4">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">
+                Mevcut Şifre <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                <input :type="showCur ? 'text' : 'password'"
+                       x-model="pw.current_password" class="form-control">
+                <button type="button" class="btn btn-outline-secondary"
+                        @click="showCur = !showCur">
+                  <i :class="showCur ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                </button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">
+                Yeni Şifre <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                <input :type="showNew ? 'text' : 'password'"
+                       x-model="pw.new_password" class="form-control"
+                       placeholder="En az 6 karakter">
+                <button type="button" class="btn btn-outline-secondary"
+                        @click="showNew = !showNew">
+                  <i :class="showNew ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                </button>
+              </div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label small fw-semibold">
+                Yeni Şifre Tekrar <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                <input :type="showCon ? 'text' : 'password'"
+                       x-model="pw.confirm_password" class="form-control">
+                <button type="button" class="btn btn-outline-secondary"
+                        @click="showCon = !showCon">
+                  <i :class="showCon ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                </button>
+              </div>
+            </div>
+            <div class="d-flex justify-content-end">
+              <button class="btn btn-primary" @click="savePassword()" :disabled="submitting">
+                <i class="bi bi-shield-check me-1"></i>Güncelle
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {# ── Giriş Geçmişi ───────────────────────────────────────────────── #}
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center gap-2">
+        <span class="fw-semibold me-auto" style="font-size:.9rem;">
+          <i class="bi bi-clock-history me-2 text-primary"></i>
+          Giriş Geçmişi
+          <span class="badge bg-primary fw-normal ms-1" x-text="histTotal"></span>
+        </span>
+        <div class="d-flex align-items-center gap-1">
+          <span class="text-muted small text-nowrap">Sayfa başına:</span>
+          <select x-model.number="histPer" @change="histPage = 1"
+                  class="form-select form-select-sm" style="width:70px;">
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+        </div>
+        <span class="text-muted d-none d-sm-inline" style="font-size:.78rem;">En yeni üstte</span>
+      </div>
+      <div class="card-body p-0">
+        <template x-if="history.length > 0">
+          <div>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0" style="min-width:520px;">
+                <thead class="table-light">
+                  <tr>
+                    <th class="ps-3 py-2 text-muted fw-semibold"
+                        style="font-size:.72rem;letter-spacing:.04em;width:150px;">TARİH</th>
+                    <th class="py-2 text-muted fw-semibold"
+                        style="font-size:.72rem;letter-spacing:.04em;width:115px;">TARAYICI</th>
+                    <th class="py-2 text-muted fw-semibold"
+                        style="font-size:.72rem;letter-spacing:.04em;width:110px;">İŞLETİM SİSTEMİ</th>
+                    <th class="py-2 text-muted fw-semibold d-none d-sm-table-cell"
+                        style="font-size:.72rem;letter-spacing:.04em;width:100px;">CİHAZ</th>
+                    <th class="py-2 pe-3 text-muted fw-semibold d-none d-md-table-cell"
+                        style="font-size:.72rem;letter-spacing:.04em;">IP ADRESİ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(row, i) in histRows" :key="i">
+                    <tr>
+                      <td class="ps-3 py-2" style="font-size:.82rem;white-space:nowrap;">
+                        <i class="bi bi-calendar3 me-1 text-muted opacity-50"></i>
+                        <span x-text="fdate(row.created_at)"></span>
+                      </td>
+                      <td class="py-2" style="font-size:.82rem;">
+                        <i :class="'bi ' + browserIcon(row.browser) + ' me-1'"></i>
+                        <span x-text="row.browser || '—'"></span>
+                      </td>
+                      <td class="py-2" style="font-size:.82rem;">
+                        <i :class="'bi ' + osIcon(row.os) + ' me-1'"></i>
+                        <span x-text="row.os || '—'"></span>
+                      </td>
+                      <td class="py-2 d-none d-sm-table-cell" style="font-size:.82rem;">
+                        <i :class="'bi ' + deviceIcon(row.device) + ' me-1 text-muted'"></i>
+                        <span x-text="row.device || '—'"></span>
+                      </td>
+                      <td class="py-2 pe-3 d-none d-md-table-cell">
+                        <code class="code-tag"
+                              style="font-size:.75rem;" x-text="row.ip_address || '—'"></code>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            {# Pagination #}
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2
+                        px-3 py-2 border-top" style="font-size:.82rem;">
+              <span class="text-muted">
+                <span x-text="histStart"></span>–<span x-text="histEnd"></span>
+                / <span x-text="histTotal"></span> kayıt
+              </span>
+              <nav x-show="histPages > 1">
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: histPage === 1 }">
+                    <button class="page-link"
+                            @click="histPage = Math.max(1, histPage - 1)">
+                      <i class="bi bi-chevron-left" style="font-size:.7rem;"></i>
+                    </button>
+                  </li>
+                  <template x-for="p in histRange" :key="p ?? ('d'+Math.random())">
+                    <li class="page-item"
+                        :class="{ active: p === histPage, disabled: p === null }">
+                      <button class="page-link" x-text="p ?? '…'"
+                              @click="p !== null && (histPage = p)"></button>
+                    </li>
+                  </template>
+                  <li class="page-item" :class="{ disabled: histPage === histPages }">
+                    <button class="page-link"
+                            @click="histPage = Math.min(histPages, histPage + 1)">
+                      <i class="bi bi-chevron-right" style="font-size:.7rem;"></i>
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </template>
+
+        <div x-show="history.length === 0" x-cloak class="text-center py-5 text-muted">
+          <i class="bi bi-clock-history fs-1 d-block mb-2 opacity-25"></i>
+          Henüz giriş geçmişi yok.
+        </div>
+      </div>
+    </div>
+
+  </div>{# /!loading #}
+</div>{# /profilePage #}
+{% endblock %}

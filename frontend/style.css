@@ -1,0 +1,48 @@
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+/* ── Alpine transition utilities ───────────────────────────────────────────── */
+/* Used in x-transition:enter-start / x-transition:leave-end                  */
+.translate-x-4   { transform: translateX(1rem); }
+.translate-x-0   { transform: translateX(0); }
+.-translate-x-4  { transform: translateX(-1rem); }
+.translate-y-2   { transform: translateY(.5rem); }
+.translate-y-0   { transform: translateY(0); }
+.scale-95        { transform: scale(.95); }
+.scale-100       { transform: scale(1); }
+.opacity-0       { opacity: 0 !important; }
+.opacity-100     { opacity: 1 !important; }
+
+/* Compound (opacity + translate combined) */
+.opacity-0.translate-x-4   { opacity: 0; transform: translateX(1rem); }
+.opacity-100.translate-x-0  { opacity: 1; transform: translateX(0); }
+
+/* ── Dark mode: btn-light → tema renklerine uyar ───────────────────────────── */
+[data-bs-theme="dark"] .btn-light {
+  --bs-btn-color:              var(--bs-body-color);
+  --bs-btn-bg:                 var(--bs-tertiary-bg);
+  --bs-btn-border-color:       var(--bs-border-color);
+  --bs-btn-hover-color:        var(--bs-body-color);
+  --bs-btn-hover-bg:           var(--bs-secondary-bg);
+  --bs-btn-hover-border-color: var(--bs-border-color);
+  --bs-btn-active-bg:          var(--bs-secondary-bg);
+  --bs-btn-active-border-color:var(--bs-border-color);
+}
+
+/* ── Dark mode: table-light override ───────────────────────────────────────── */
+/* Bootstrap'in table-light sınıfı hardcoded renk kullanır; dark mode'da ezilir */
+[data-bs-theme="dark"] .table-light {
+  --bs-table-color:        var(--bs-body-color);
+  --bs-table-bg:           var(--bs-tertiary-bg);
+  --bs-table-border-color: var(--bs-border-color);
+  --bs-table-striped-bg:   var(--bs-secondary-bg);
+  --bs-table-hover-bg:     var(--bs-secondary-bg);
+}
+
+/* ── Extra button size ──────────────────────────────────────────────────────── */
+.btn-xs {
+  --bs-btn-padding-x: .45rem;
+  --bs-btn-padding-y: .18rem;
+  --bs-btn-font-size: .72rem;
+  --bs-btn-border-radius: var(--bs-border-radius-sm);
+}

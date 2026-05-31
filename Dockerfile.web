@@ -1,0 +1,21 @@
+# Stage 1: Vite ile JS/CSS bundle'la
+FROM node:20-alpine AS vite-build
+WORKDIR /build
+COPY package.json vite.config.js ./
+COPY frontend/ frontend/
+RUN npm install && npm run build
+
+# Stage 2: Flask uygulaması
+FROM python:3.11-slim
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Vite çıktısını kopyala
+COPY --from=vite-build /build/static/dist/ static/dist/
+
+COPY web_app.py .
+COPY templates/ templates/
+
+CMD ["python", "web_app.py"]

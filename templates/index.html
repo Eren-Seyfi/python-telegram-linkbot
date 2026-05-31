@@ -1,0 +1,158 @@
+{% extends "layouts/panel.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+
+{# ── Stat kartları ─────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-lg-4">
+    <div class="card stat-card border-0 shadow-sm h-100">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="stat-icon bg-primary bg-opacity-10">
+          <i class="bi bi-link-45deg text-primary"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">TOPLAM LİNK</div>
+          <div class="fs-2 fw-bold lh-1 mt-1">{{ total_links }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-4">
+    <div class="card stat-card border-0 shadow-sm h-100">
+      <a href="{{ url_for('groups_page') }}" class="text-decoration-none">
+        <div class="card-body d-flex align-items-center gap-3 p-3">
+          <div class="stat-icon bg-primary bg-opacity-10">
+            <i class="bi bi-people text-primary"></i>
+          </div>
+          <div style="min-width:0;">
+            <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">KAYNAK GRUP</div>
+            {% if sources %}
+              <div class="fw-bold lh-1 mt-1">{{ sources|length }}</div>
+              <div class="text-truncate mt-1" style="font-size:.75rem;max-width:140px;">
+                {% for s in sources[:2] %}
+                  <span class="badge bg-primary bg-opacity-75 fw-normal">
+                    {{ s.title or s.chat_id }}
+                  </span>
+                {% endfor %}
+                {% if sources|length > 2 %}
+                  <span class="text-muted">+{{ sources|length - 2 }}</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="text-muted mt-1" style="font-size:.82rem;">Tanımlı değil</div>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card stat-card border-0 shadow-sm h-100">
+      <a href="{{ url_for('groups_page') }}" class="text-decoration-none">
+        <div class="card-body d-flex align-items-center gap-3 p-3">
+          <div class="stat-icon bg-success bg-opacity-10">
+            <i class="bi bi-megaphone text-success"></i>
+          </div>
+          <div style="min-width:0;">
+            <div class="text-muted" style="font-size:.72rem;letter-spacing:.03em;">HEDEF GRUP</div>
+            {% if targets %}
+              <div class="fw-bold lh-1 mt-1">{{ targets|length }}</div>
+              <div class="text-truncate mt-1" style="font-size:.75rem;max-width:140px;">
+                {% for t in targets[:2] %}
+                  <span class="badge bg-success bg-opacity-75 fw-normal">
+                    {{ t.title or t.chat_id }}
+                  </span>
+                {% endfor %}
+                {% if targets|length > 2 %}
+                  <span class="text-muted">+{{ targets|length - 2 }}</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="text-muted mt-1" style="font-size:.82rem;">Tanımlı değil</div>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+{# ── Uyarı: kaynak veya hedef tanımlı değilse ──────────────────────────── #}
+{% if not sources or not targets %}
+<div class="alert alert-warning d-flex gap-2 align-items-start mb-4" style="font-size:.85rem;">
+  <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+  <div>
+    {% if not sources and not targets %}
+      Bot henüz hiçbir grup ile yapılandırılmamış.
+    {% elif not sources %}
+      Kaynak grup tanımlı değil — bot dinlenecek grubu bilmiyor.
+    {% else %}
+      Hedef grup tanımlı değil — bot iletilen mesajları nereye göndereceğini bilmiyor.
+    {% endif %}
+    <a href="{{ url_for('groups_page') }}" class="alert-link">Gruplar sayfasından</a> kaynak ve hedef grupları atayın.
+  </div>
+</div>
+{% endif %}
+
+{# ── Son eklenen linkler ───────────────────────────────────────────────── #}
+<div class="card border-0 shadow-sm">
+  <div class="card-header d-flex align-items-center justify-content-between py-3">
+    <span class="fw-semibold" style="font-size:.9rem;">
+      <i class="bi bi-clock-history me-2 text-primary"></i>Son Eklenen Linkler
+    </span>
+    <a href="{{ url_for('links_page') }}" class="btn btn-sm btn-outline-primary">
+      Tümünü Gör <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if links %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="min-width:400px;">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3 py-2 fw-semibold text-muted"
+                style="font-size:.72rem;letter-spacing:.04em;width:190px;">ANAHTAR KELİME</th>
+            <th class="py-2 fw-semibold text-muted"
+                style="font-size:.72rem;letter-spacing:.04em;">HEDEF URL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for link in links %}
+          <tr>
+            <td class="ps-3 py-2">
+              <span class="code-tag">{{ link.keyword }}</span>
+            </td>
+            <td class="py-2">
+              <a href="{{ link.url }}" target="_blank" rel="noopener"
+                 class="text-decoration-none d-flex align-items-center gap-1"
+                 style="max-width:min(460px,55vw);">
+                <span class="text-truncate text-muted" style="font-size:.82rem;">{{ link.url }}</span>
+                <i class="bi bi-box-arrow-up-right flex-shrink-0 text-muted"
+                   style="font-size:.65rem;"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+      Henüz link eklenmemiş.
+      <div class="mt-2">
+        <a href="{{ url_for('links_page') }}" class="btn btn-primary btn-sm">Link Ekle</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
